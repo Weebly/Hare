@@ -8,35 +8,35 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 )
 
 const (
-	HARE_API_PORT_DEFAULT        = "8080"
-	RABBITMQ_HOST                = ""
-	RABBITMQ_PORT                = "5672"
-	RABBITMQ_VHOST               = ""
-	RABBITMQ_MANAGEMENT_PORT     = "55672"
-	RABBITMQ_USERNAME            = ""
-	RABBITMQ_PASSWORD            = ""
-	RABBITMQ_MANAGEMENT_USERNAME = ""
-	RABBITMQ_MANAGEMENT_PASSWORD = ""
-	RABBITMQ_URI                 = "amqp://" + RABBITMQ_USERNAME + ":" + RABBITMQ_PASSWORD + "@" + RABBITMQ_HOST + ":" + RABBITMQ_PORT + "/" + RABBITMQ_VHOST
-	RABBITMQ_MANAGEMENT_URI      = "http://" + RABBITMQ_HOST + ":" + RABBITMQ_MANAGEMENT_PORT + "/api/definitions/"
+	HARE_API_PORT_DEFAULT                  = "8080"
+	RABBITMQ_HOST                          = "5672"
+	RABBITMQ_PORT                          = ""
+	RABBITMQ_VHOST                         = ""
+	RABBITMQ_MANAGEMENT_PORT               = "55672"
+	RABBITMQ_USERNAME                      = ""
+	RABBITMQ_PASSWORD                      = ""
+	RABBITMQ_MANAGEMENT_USERNAME           = ""
+	RABBITMQ_MANAGEMENT_PASSWORD           = ""
+	RABBITMQ_URI                           = "amqp://" + RABBITMQ_USERNAME + ":" + RABBITMQ_PASSWORD + "@" + RABBITMQ_HOST + ":" + RABBITMQ_PORT + "/" + RABBITMQ_VHOST
+	RABBITMQ_MANAGEMENT_URI                = "http://" + RABBITMQ_HOST + ":" + RABBITMQ_MANAGEMENT_PORT + "/api/definitions/"
+	HARE_RABBITMQ_CONNECTION_RETRY_MAXIMUM = 5
 
 	/**
 	 * Statistics related strings
 	 */
-	RUNTIME_PUBLISHES_RECEIVED = "runtime_publishes_received"
-	RUNTIME_PUBLISHES_SUCCESS  = "runtime_publishes_success"
-	RUNTIME_PUBLISHES_FAILURE  = "runtime_publishes_failure"
+	RUNTIME_PUBLISHES_RECEIVED          = "runtime_publishes_received"
+	RUNTIME_PUBLISHES_SUCCESS           = "runtime_publishes_success"
+	RUNTIME_PUBLISHES_FAILURE           = "runtime_publishes_failure"
+	RUNTIME_PUBLISHES_FAILURE_400       = "runtime_publishes_failure_bad_request"
+	RUNTIME_PUBLISHES_FAILURE_404       = "runtime_publishes_failure_not_found"
+	RUNTIME_PUBLISHES_FAILURE_500       = "runtime_publishes_failure_publish_error"
+	RUNTIME_RABBITMQ_CONNECTION_FAILURE = "runtime_rabbitmq_connection_failure"
 )
-
-/**
- * Maintain the connection to RabbitMQ for publishing
- */
-var Connection, Err = amqp.Dial(RABBITMQ_URI)
-var Channel, Cerr = Connection.Channel()
 
 /**
  * Definitions contains the details of the exchanges on the given host, vhost
@@ -55,36 +55,86 @@ var Definitions = make(map[string]*ExchangeDefinition)
  */
 var Statistics = make(map[string]int)
 
+/**
+ * AMQP connection and channel
+ */
+var Connection *amqp.Connection
+var Channel *amqp.Channel
+
+func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+}
+
 func main() {
-	log.Print("Hare started.\n")
+	Connection = getConnection()
+	Channel = getChannel()
 
-	/**
-	 * Are we alive?
-	 */
-	if Err != nil {
-		log.Fatalf("Unable to connect to RabbitMQ via AMQP - %s", Err)
-	}
-	if Cerr != nil {
-		log.Fatalf("Couldn't create channel - %s", Cerr)
-	}
-	defer Connection.Close()
+	log.Printf("Hare started, connected to remote RabbitMQ host at %s.", RABBITMQ_HOST)
 
-	log.Print("Connected to RabbitMQ.\n")
-
-	/**
-	 * Retrieve data from the RabbitMQ host to maintain definitions
-	 */
-	if err := getDefinitions(); err != nil {
-		log.Fatal(err)
+	if err := populateDefinitions(); err != nil {
+		log.Fatalf("Failed to retrieve definitions, %s.", err)
 	}
 
-	log.Print("Definitions retrieved.\n")
+	log.Print("Definitions retrieved.")
 
 	/**
-	 * We're ready to start our webservice broker.
+	 * We're ready to start our web API.
 	 */
 	if err := startWebService(); err != nil {
-		log.Fatalf("Failed to start webservice - %s\n", err)
+		log.Fatalf("Failed to start webservice, %s.", err)
+	}
+}
+
+/**
+ * Retrieves a connection from the configured AMQP endpoint
+ *
+ * @return amqp.Connection
+ */
+func getConnection() *amqp.Connection {
+	connection, err := amqp.Dial(RABBITMQ_URI)
+	if err != nil {
+		handleAmqpError(err)
+	}
+
+	return connection
+}
+
+/**
+ * Retrieves a channel from the current connected AMQP host
+ *
+ * @return amqp.Channel
+ */
+func getChannel() *amqp.Channel {
+	channel, err := Connection.Channel()
+	if err != nil {
+		handleAmqpError(err)
+	}
+
+	return channel
+}
+
+func handleAmqpError(err error) {
+	switch err {
+	case amqp.ErrClosed:
+		log.Printf("AMQP connection error, %v.", err)
+		/**
+		 * Don't want to loop through this for too long.
+		 */
+		if Statistics[RUNTIME_RABBITMQ_CONNECTION_FAILURE] > HARE_RABBITMQ_CONNECTION_RETRY_MAXIMUM {
+			log.Fatal("Maximum connection retry count has been reached. Exiting.")
+		}
+		Connection = getConnection()
+		Channel = getChannel()
+
+		Statistics[RUNTIME_RABBITMQ_CONNECTION_FAILURE] = Statistics[RUNTIME_RABBITMQ_CONNECTION_FAILURE] + 1
+		log.Print("Reconnected to remote host.")
+	case amqp.ErrSASL, amqp.ErrCredentials, amqp.ErrVhost:
+		/**
+		 * These errors should be considered pretty much fatal.
+		 */
+		log.Fatalf("Fatal AMQP connection error, %s.", err.Error())
+	default:
+		log.Fatalf("Unexpected AMQP error, %s.", err)
 	}
 }
 
@@ -93,7 +143,7 @@ func main() {
  *
  * @return void
  */
-func getDefinitions() error {
+func populateDefinitions() error {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", RABBITMQ_MANAGEMENT_URI, nil)
 	req.SetBasicAuth(RABBITMQ_MANAGEMENT_USERNAME, RABBITMQ_MANAGEMENT_PASSWORD)
@@ -101,20 +151,17 @@ func getDefinitions() error {
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
 	if err != nil {
-		return fmt.Errorf("Failed to perform HTTP request to %s", RABBITMQ_HOST)
+		return err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Failed to read from management API - %s\n", err)
+		return err
 	}
 
 	json, err := simplejson.NewJson(body)
 
-	c := 0
-	for c < len(json.Get("exchanges").MustArray()) {
-		c = c + 1
-
+	for c := 0; c < len(json.Get("exchanges").MustArray()); c++ {
 		if len(json.Get("exchanges").GetIndex(c).Get("name").MustString()) > 0 {
 			durable, _ := json.Get("exchanges").GetIndex(c).Get("durable").Bool()
 			delete, _ := json.Get("exchanges").GetIndex(c).Get("auto_delete").Bool()
@@ -135,14 +182,14 @@ func getDefinitions() error {
 /**
  * Starts the API endpoint webservice
  *
- * @return nil
+ * @return error
  */
 func startWebService() error {
 	log.Printf("API service available on port %s.", HARE_API_PORT_DEFAULT)
 	http.HandleFunc("/", apiRequestHandler)
 	err := http.ListenAndServe(":"+HARE_API_PORT_DEFAULT, nil)
 	if err != nil {
-		return fmt.Errorf("%s", err)
+		return err
 	}
 	return nil
 }
@@ -183,11 +230,13 @@ func apiRequestHandler(w http.ResponseWriter, r *http.Request) {
  * @return void
  */
 func apiRequestReload(w http.ResponseWriter, r *http.Request) {
-	if err := getDefinitions(); err != nil {
+	Definitions = make(map[string]*ExchangeDefinition)
+
+	if err := populateDefinitions(); err != nil {
 		fmt.Fprint(w, err)
 	}
 
-	fmt.Fprintf(w, "Definitions retrieved.\n\nNew Object:\n%s", Definitions)
+	fmt.Fprintf(w, "Definitions retrieved.\nNew Object:\n%v", Definitions)
 }
 
 /**
@@ -199,7 +248,7 @@ func apiRequestReload(w http.ResponseWriter, r *http.Request) {
  * @return void
  */
 func apiRequestExit(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Exit command received by %s", r.RemoteAddr)
+	log.Printf("Exit command received by %s.", r.RemoteAddr)
 	os.Exit(2)
 }
 
@@ -220,15 +269,20 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
 	 */
 	if Definitions[path[2]] == nil {
 		/**
-		 * We don't have this exchange URI (get out)
+		 * We don't have this exchange URI
 		 */
 		Statistics[RUNTIME_PUBLISHES_FAILURE] = Statistics[RUNTIME_PUBLISHES_FAILURE] + 1
+		Statistics[RUNTIME_PUBLISHES_FAILURE_404] = Statistics[RUNTIME_PUBLISHES_FAILURE_404] + 1
 		http.NotFound(w, r)
 		return
 	}
 
 	if len(r.FormValue("body")) < 1 {
+		/**
+		 * No body was associated with the request
+		 */
 		Statistics[RUNTIME_PUBLISHES_FAILURE] = Statistics[RUNTIME_PUBLISHES_FAILURE] + 1
+		Statistics[RUNTIME_PUBLISHES_FAILURE_400] = Statistics[RUNTIME_PUBLISHES_FAILURE_400] + 1
 		http.Error(w, "POST is required for publish.", 400)
 		return
 	}
@@ -238,7 +292,7 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
 
 	if len(path) < 4 {
 		/**
-		 * No routing key was defined.
+		 * No routing key was defined, which is fine -- use emptystring
 		 */
 		routingKey = ""
 	} else {
@@ -247,6 +301,7 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
 
 	if err := publish(*e, routingKey, r.FormValue("body")); err != nil {
 		Statistics[RUNTIME_PUBLISHES_FAILURE] = Statistics[RUNTIME_PUBLISHES_FAILURE] + 1
+		Statistics[RUNTIME_PUBLISHES_FAILURE_500] = Statistics[RUNTIME_PUBLISHES_FAILURE_500] + 1
 		http.Error(w, "Error Publishing", 500)
 		return
 	}
@@ -264,20 +319,20 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
  * @return void
  */
 func apiRequestStats(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Delivery Statistics:\n%s\n\nExchange Definition Object:\n%d", Statistics, Definitions)
+	fmt.Fprintf(w, "Delivery Statistics:\n%v\n\nExchange Definition Object:\n%s", Statistics, Definitions)
 }
 
 /**
- * Publishes to RabbitMQ with the given connection, exchange, type, etc..
+ * Publishes the given message to RabbitMQ with the current connection, given ExchangeDefinition
  *
  * @param e ExchangeDefinition
  * @param string routingKey
  * @param string body
  *
- * @return nil|error
+ * @return error
  */
 func publish(e ExchangeDefinition, routingKey string, body string) error {
-	if Cerr = Channel.ExchangeDeclare(
+	if err := Channel.ExchangeDeclare(
 		e.Name,
 		e.Type,
 		e.Durability,
@@ -285,11 +340,12 @@ func publish(e ExchangeDefinition, routingKey string, body string) error {
 		false,
 		false,
 		nil,
-	); Cerr != nil {
-		return fmt.Errorf("Declaration failure. %s\n", Cerr)
+	); err != nil {
+		handleAmqpError(err)
+		return err
 	}
 
-	if Cerr = Channel.Publish(
+	if err := Channel.Publish(
 		e.Name,
 		routingKey,
 		false,
@@ -301,8 +357,9 @@ func publish(e ExchangeDefinition, routingKey string, body string) error {
 			Body:            []byte(body),
 			DeliveryMode:    amqp.Transient,
 		},
-	); Cerr != nil {
-		return fmt.Errorf("Publishing failure. %s\n", Cerr)
+	); err != nil {
+		handleAmqpError(err)
+		return err
 	}
 
 	return nil
