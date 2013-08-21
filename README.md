@@ -13,7 +13,7 @@ Requirements
 
 Usage
 -----
-After adding your details to the configuration constants, start hare with `go run hare`.
+After adding your details to the configuration constants, start hare with `go run hare.go`.
 
 API
 ---
@@ -51,6 +51,7 @@ To access Hare, use the following API endpoints:
 
 Todo
 ----
+ * Add support for more than one vhost.
  * Purge map of definitions on reload requests.
  * Allow for command line args to define port.
  * Pretty up stats a bit.
