@@ -13,7 +13,7 @@ Requirements
 
 Usage
 -----
-After adding your details to the configuration constants, start hare with `go run hare`.
+After adding your details to the configuration constants, start hare with `go run hare.go`.
 
 API
 ---
