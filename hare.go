@@ -161,6 +161,8 @@ func populateDefinitions() error {
 
 	json, err := simplejson.NewJson(body)
 
+	defs := make(map[string]*ExchangeDefinition)
+
 	for c := 0; c < len(json.Get("exchanges").MustArray()); c++ {
 		if len(json.Get("exchanges").GetIndex(c).Get("name").MustString()) > 0 {
 			durable, _ := json.Get("exchanges").GetIndex(c).Get("durable").Bool()
@@ -173,9 +175,11 @@ func populateDefinitions() error {
 				delete,
 			}
 
-			Definitions[json.Get("exchanges").GetIndex(c).Get("name").MustString()] = d
+			defs[json.Get("exchanges").GetIndex(c).Get("name").MustString()] = d
 		}
 	}
+
+	Definitions = defs
 	return nil
 }
 
@@ -230,13 +234,11 @@ func apiRequestHandler(w http.ResponseWriter, r *http.Request) {
  * @return void
  */
 func apiRequestReload(w http.ResponseWriter, r *http.Request) {
-	Definitions = make(map[string]*ExchangeDefinition)
-
 	if err := populateDefinitions(); err != nil {
 		fmt.Fprint(w, err)
 	}
 
-	fmt.Fprintf(w, "Definitions retrieved.\nNew Object:\n%v", Definitions)
+	fmt.Fprintf(w, "Definitions retrieved.\nNew Object:\n%s", Definitions)
 }
 
 /**
