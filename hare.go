@@ -9,15 +9,17 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-	HARE_API_PORT_DEFAULT                  = "8080"
-	RABBITMQ_HOST                          = "5672"
-	RABBITMQ_PORT                          = ""
+	HARE_API_PORT_DEFAULT                  = ""
+	RABBITMQ_HOST                          = ""
+	RABBITMQ_PORT                          = "5672"
 	RABBITMQ_VHOST                         = ""
-	RABBITMQ_MANAGEMENT_PORT               = "55672"
+	RABBITMQ_MANAGEMENT_PORT               = "15672"
 	RABBITMQ_USERNAME                      = ""
 	RABBITMQ_PASSWORD                      = ""
 	RABBITMQ_MANAGEMENT_USERNAME           = ""
@@ -53,7 +55,7 @@ var Definitions = make(map[string]*ExchangeDefinition)
 /**
  * Statistics Collector
  */
-var Statistics = make(map[string]int)
+var Statistics = make(map[string]uint64)
 
 /**
  * AMQP connection and channel
@@ -285,11 +287,32 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
 		 */
 		Statistics[RUNTIME_PUBLISHES_FAILURE] = Statistics[RUNTIME_PUBLISHES_FAILURE] + 1
 		Statistics[RUNTIME_PUBLISHES_FAILURE_400] = Statistics[RUNTIME_PUBLISHES_FAILURE_400] + 1
-		http.Error(w, "POST is required for publish.", 400)
+		http.Error(w, "POST is required for publish.", http.StatusBadRequest)
 		return
 	}
 
-	e := Definitions[path[2]]
+	/**
+	 * Deal with non-string type conversions
+	 */
+	dm, err := strconv.Atoi(r.FormValue("delivery_mode"))
+	if err != nil {
+		dm = 0
+	}
+	pri, err := strconv.Atoi(r.FormValue("priority"))
+	if err != nil {
+		pri = 0
+	}
+
+	var delivery_mode uint8 = uint8(dm)
+	var priority uint8 = uint8(pri)
+
+	timestamp, err := time.Parse(time.UnixDate, r.FormValue("timestamp"))
+	if err != nil {
+		timestamp = time.Now()
+	}
+
+	exchange := Definitions[path[2]]
+
 	var routingKey string
 
 	if len(path) < 4 {
@@ -301,14 +324,32 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request, path []string) {
 		routingKey = path[3]
 	}
 
-	if err := publish(*e, routingKey, r.FormValue("body")); err != nil {
+	message := &amqp.Publishing{
+		Body:            []byte(r.FormValue("body")),
+		Headers:         amqp.Table{},
+		ContentType:     r.FormValue("content_type"),
+		ContentEncoding: r.FormValue("content_encoding"),
+		DeliveryMode:    delivery_mode,
+		Priority:        priority,
+		CorrelationId:   r.FormValue("correlation_id"),
+		ReplyTo:         r.FormValue("reply_to"),
+		Expiration:      r.FormValue("expiration"),
+		MessageId:       r.FormValue("message_id"),
+		Timestamp:       timestamp,
+		Type:            r.FormValue("type"),
+		UserId:          r.FormValue("user_id"),
+		AppId:           r.FormValue("app_id"),
+	}
+
+	if err := publish(*exchange, routingKey, *message); err != nil {
 		Statistics[RUNTIME_PUBLISHES_FAILURE] = Statistics[RUNTIME_PUBLISHES_FAILURE] + 1
 		Statistics[RUNTIME_PUBLISHES_FAILURE_500] = Statistics[RUNTIME_PUBLISHES_FAILURE_500] + 1
-		http.Error(w, "Error Publishing", 500)
+		http.Error(w, "Error Publishing", http.StatusInternalServerError)
 		return
 	}
 
 	Statistics[RUNTIME_PUBLISHES_SUCCESS] = Statistics[RUNTIME_PUBLISHES_SUCCESS] + 1
+	w.WriteHeader(http.StatusNoContent)
 	return
 }
 
@@ -333,7 +374,7 @@ func apiRequestStats(w http.ResponseWriter, r *http.Request) {
  *
  * @return error
  */
-func publish(e ExchangeDefinition, routingKey string, body string) error {
+func publish(e ExchangeDefinition, routingKey string, message amqp.Publishing) error {
 	if err := Channel.ExchangeDeclare(
 		e.Name,
 		e.Type,
@@ -352,13 +393,7 @@ func publish(e ExchangeDefinition, routingKey string, body string) error {
 		routingKey,
 		false,
 		false,
-		amqp.Publishing{
-			Headers:         amqp.Table{},
-			ContentType:     "text/plain",
-			ContentEncoding: "",
-			Body:            []byte(body),
-			DeliveryMode:    amqp.Transient,
-		},
+		message,
 	); err != nil {
 		handleAmqpError(err)
 		return err
