@@ -12,7 +12,9 @@ Requirements
 
 Usage
 -----
-After performing a `go get` to retrieve the source, edit the configuration.go source to set your application's default settings.
+ * After performing a `go get` to retrieve the source, edit the configuration.go source to set your application's default settings.
+ * `go install github.com/{user}/hare` to compile and install the hare binary in your $GOPATH/bin
+ * `./hare` to start.
 
 API
 ---
