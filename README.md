@@ -3,8 +3,7 @@ Hare
 Hare is a HTTP to RabbitMQ publishing gateway, written in Go.
 Hare solves some of the issues related to short-lived processes (such as PHP) publishing to RabbitMQ, namely overwhelming RabbitMQ with connections.
 
-Hare connects to your RabbitMQ administration API to retrieve exchange definitions, preventing the need to maintain somewhat irrelevant implementation details in your publishing application logic.
-
+Hare is API compatible with https://github.com/gmr/statelessd for publishing.
 
 Requirements
 ------------
@@ -13,7 +12,7 @@ Requirements
 
 Usage
 -----
-After adding your details to the configuration constants, start hare with `go run hare`.
+After performing a `go get` to retrieve the source, edit the configuration.go source to set your application's default settings.
 
 API
 ---
@@ -30,10 +29,6 @@ To access Hare, use the following API endpoints:
     <td>Responds with delivery statistics, and an overview of the current definitions object.</td>
   </tr>
   <tr>
-    <td>GET: http://harehost:port/reload</td>
-    <td>Reloads the definition object by performing another request to the RabbitMQ administration API. Responds with an overview of the new definitions object.</td>
-  </tr>
-  <tr>
     <td>GET: http://harehost:port/exit</td>
     <td>Empty response. Stops the Hare gateway, logging the initiator of the request to stdout.</td>
   </tr>
@@ -42,16 +37,15 @@ To access Hare, use the following API endpoints:
  * Publishing
 <table>
   <tr>
-    <td>POST: http://harehost:port/publish/{exchange}/{routingKey} body=message</td>
+    <td>POST: http://username:password@harehost:port/{vhost}/{exchange}/{routingKey}</td>
     <td>Requires POST field of body.</td>
-    <td>On success, HTTP 200.</td>
-    <td>On failure, can respond with 404 (exchange not found), 400 (no post), 500 (publishing failure)</td>
+    <td>On success, HTTP 204.</td>
+    <td>On failure, can respond with 403 (bad username/password for given vhost), 401 (no username/password given for vhost), 400 (missing post body), 500 (publishing error)</td>
   </tr>
 </table>
 
 Todo
 ----
- * Add support for more than one vhost.
  * Allow for command line args to define port.
  * Pretty up stats a bit.
 
