@@ -28,7 +28,7 @@ To access Hare, use the following API endpoints:
   </tr>
   <tr>
     <td>GET: http://harehost:port/stats</td>
-    <td>Responds with delivery statistics, and an overview of the current definitions object.</td>
+    <td>Responds with simple delivery statistics.</td>
   </tr>
   <tr>
     <td>GET: http://harehost:port/exit</td>
@@ -39,9 +39,9 @@ To access Hare, use the following API endpoints:
  * Publishing
 <table>
   <tr>
-    <td>POST: http://username:password@harehost:port/{vhost}/{exchange}/{routingKey}</td>
+    <td>POST:<br />http://user:pass@host:port/{vhost}/{exchange}/{routingKey}</td>
     <td>Requires POST field of body.</td>
-    <td>On success, HTTP 204.</td>
+    <td>On success, responds HTTP 204.</td>
     <td>On failure, can respond with 403 (bad username/password for given vhost), 401 (no username/password given for vhost), 400 (missing post body), 500 (publishing error)</td>
   </tr>
 </table>
