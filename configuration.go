@@ -1,4 +1,4 @@
-package hare
+package main
 
 const (
 	HARE_API_PORT_PUBLISHING               = "8080"

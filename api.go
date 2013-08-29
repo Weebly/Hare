@@ -1,4 +1,4 @@
-package hare
+package main
 
 import (
 	"log"
