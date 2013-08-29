@@ -43,6 +43,5 @@ func apiRequestExit(w http.ResponseWriter, r *http.Request) {
  */
 func apiRequestAlive(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Alive")
-	w.WriteHeader(http.StatusOK)
 	return
 }
