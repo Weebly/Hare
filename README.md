@@ -48,7 +48,6 @@ To access Hare, use the following API endpoints:
 
 Todo
 ----
- * Allow for command line args to define port.
  * Pretty up stats a bit.
 
 License
