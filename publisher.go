@@ -33,8 +33,16 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
+	vhost := getUriValue(path, 1)
+	if len(vhost) < 1 {
+		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)
+		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_404)
+		http.NotFound(w, r)
+		return
+	}
+
 	definition := &ConnectionDefinition{
-		path[1],
+		vhost,
 		auth[0],
 		auth[1],
 	}
@@ -56,14 +64,8 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	exchange := path[2]
-
-	var routingKey string
-	if len(path[3]) < 1 {
-		routingKey = ""
-	} else {
-		routingKey = path[3]
-	}
+	exchange := getUriValue(path, 2)
+	routingKey := getUriValue(path, 3)
 
 	if err := publish(*definition, exchange, routingKey, *message); err != nil {
 		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)

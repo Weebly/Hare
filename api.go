@@ -45,3 +45,19 @@ func apiRequestAlive(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "Alive")
 	return
 }
+
+/**
+ * Safely retrieves the given URI value from the request
+ */
+func getUriValue(path []string, index int) string {
+  /**
+   * Always return a string, we don't care if the index is out of bounds
+   */
+  defer func() (s string) {
+    _ = recover()
+    return s
+  }()
+
+  val := path[index]
+  return val
+}
