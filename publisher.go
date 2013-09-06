@@ -28,6 +28,8 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 
 	auth, err := getAuthentication(r)
 	if err != nil {
+		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)
+		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_401)
 		header := http.Header{}
 		header.Add("WWW-Authenticate", "Basic realm=hare")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -52,7 +54,7 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)
 			if err == amqp.ErrVhost || err == amqp.ErrCredentials {
-				statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_AUTHORIZATION)
+				statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_403)
 				w.WriteHeader(http.StatusForbidden)
 				return
 			} else {
