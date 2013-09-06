@@ -8,15 +8,15 @@ const (
 	/**
 	 * Statistics related strings
 	 */
-	RUNTIME_PUBLISHES_RECEIVED              = "runtime_publishes_received"
-	RUNTIME_PUBLISHES_SUCCESS               = "runtime_publishes_success"
-	RUNTIME_PUBLISHES_FAILURE               = "runtime_publishes_failure"
-	RUNTIME_PUBLISHES_FAILURE_400           = "runtime_publishes_failure_bad_request"
-	RUNTIME_PUBLISHES_FAILURE_401           = "runtime_publishes_failure_no_credentials"
-	RUNTIME_PUBLISHES_FAILURE_403           = "runtime_publishes_failure_bad_credentials"
-	RUNTIME_PUBLISHES_FAILURE_404           = "runtime_publishes_failure_not_found"
-	RUNTIME_PUBLISHES_FAILURE_500           = "runtime_publishes_failure_publish_error"
-	RUNTIME_RABBITMQ_CONNECTION_FAILURE     = "runtime_rabbitmq_connection_failure"
+	RUNTIME_PUBLISHES_RECEIVED          = "runtime_publishes_received"
+	RUNTIME_PUBLISHES_SUCCESS           = "runtime_publishes_success"
+	RUNTIME_PUBLISHES_FAILURE           = "runtime_publishes_failure"
+	RUNTIME_PUBLISHES_FAILURE_400       = "runtime_publishes_failure_bad_request"
+	RUNTIME_PUBLISHES_FAILURE_401       = "runtime_publishes_failure_no_credentials"
+	RUNTIME_PUBLISHES_FAILURE_403       = "runtime_publishes_failure_bad_credentials"
+	RUNTIME_PUBLISHES_FAILURE_404       = "runtime_publishes_failure_not_found"
+	RUNTIME_PUBLISHES_FAILURE_500       = "runtime_publishes_failure_publish_error"
+	RUNTIME_RABBITMQ_CONNECTION_FAILURE = "runtime_rabbitmq_connection_failure"
 )
 
 const (
