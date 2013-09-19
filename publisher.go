@@ -32,7 +32,9 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_401)
 		header := http.Header{}
 		header.Add("WWW-Authenticate", "Basic realm=hare")
-		w.WriteHeader(http.StatusUnauthorized)
+		header.Add("Status", "HTTP/1.1 401")
+		_ = header.Write(w)
+		return
 	}
 
 	vhost := getUriValue(path, 1)
@@ -45,8 +47,8 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 
 	definition := &ConnectionDefinition{
 		vhost,
-		auth[0],
-		auth[1],
+		auth["user"],
+		auth["pass"],
 	}
 
 	if Connection[path[1]] == nil {
@@ -153,7 +155,12 @@ func getMessageFromPost(r *http.Request) (*amqp.Publishing, error) {
 /**
  * Retrieves the passed authentication user/password from the given Authentication header
  */
-func getAuthentication(r *http.Request) ([]string, error) {
+func getAuthentication(r *http.Request) (map[string]string, error) {
+	defer func() (map[string]string, error) {
+		_ = recover()
+		return nil, errors.New(ERROR_PUBLISH_NO_AUTHORIZATION)
+	}()
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, errors.New(ERROR_PUBLISH_NO_AUTHORIZATION)
@@ -161,9 +168,17 @@ func getAuthentication(r *http.Request) ([]string, error) {
 
 	a := strings.IndexRune(authHeader, ' ')
 	str, err := base64.StdEncoding.DecodeString(authHeader[a+1:])
+
+	auth := make(map[string]string)
+
 	if err != nil {
-		return nil, errors.New(ERROR_PUBLISH_NO_AUTHORIZATION)
+		auth["user"] = ""
+		auth["pass"] = ""
+		return auth, errors.New(ERROR_PUBLISH_NO_AUTHORIZATION)
 	} else {
-		return strings.Split(string(str), ":"), nil
+		a := strings.Split(string(str), ":")
+		auth["user"] = a[0]
+		auth["pass"] = a[1]
+		return auth, nil
 	}
 }

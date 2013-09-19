@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"github.com/streadway/amqp"
 	"log"
 )
@@ -12,6 +11,7 @@ import (
 func GetConnection(definition ConnectionDefinition) error {
 	connection, err := amqp.Dial("amqp://" + definition.Username + ":" + definition.Password + "@" + RABBITMQ_HOST + ":" + RABBITMQ_PORT + "/" + definition.Vhost)
 	if err != nil {
+		log.Print(err)
 		if err == amqp.ErrClosed {
 			return retryAmqpConnection(definition)
 		}
@@ -46,7 +46,7 @@ func retryAmqpConnection(connection ConnectionDefinition) error {
 	 * Don't want to loop through this for too long.
 	 */
 	if Statistics[RUNTIME_RABBITMQ_CONNECTION_FAILURE] > HARE_RABBITMQ_CONNECTION_RETRY_MAXIMUM {
-		return errors.New("Maximum connection retry count has been reached.")
+		log.Fatal("Maximum connection retry count has been reached.")
 	}
 
 	err := GetConnection(connection)
