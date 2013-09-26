@@ -2,12 +2,7 @@ package main
 
 import (
 	"log"
-	"runtime"
 )
-
-func init() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-}
 
 func main() {
 	log.Printf("Hare started, connected to remote RabbitMQ host at %s.", RABBITMQ_HOST)
