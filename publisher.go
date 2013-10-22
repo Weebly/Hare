@@ -117,7 +117,7 @@ func getMessageFromPost(r *http.Request) (*amqp.Publishing, error) {
 	 */
 	dm, err := strconv.Atoi(r.FormValue("delivery_mode"))
 	if err != nil {
-		dm = 0
+		dm = 1
 	}
 	pri, err := strconv.Atoi(r.FormValue("priority"))
 	if err != nil {
