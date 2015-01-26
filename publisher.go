@@ -51,21 +51,20 @@ func apiRequestPublish(w http.ResponseWriter, r *http.Request) {
 		auth["pass"],
 	}
 
-	if Connection[path[1]] == nil {
-		err = GetConnection(*definition)
-		if err != nil {
-			statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)
-			if err == amqp.ErrVhost || err == amqp.ErrCredentials {
-				statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_403)
-				w.WriteHeader(http.StatusForbidden)
-				return
-			} else {
-				statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_500)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+	//Ensure we have a connection to VHOST
+	_, _, err = GetConnection(*definition)
+	if err != nil {
+		statisticsIncrement(RUNTIME_PUBLISHES_FAILURE)
+		if err == amqp.ErrVhost || err == amqp.ErrCredentials {
+			statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_403)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		} else {
+			statisticsIncrement(RUNTIME_PUBLISHES_FAILURE_500)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		return
 	}
 
 	exchange := getUriValue(path, 2)

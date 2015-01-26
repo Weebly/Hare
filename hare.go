@@ -16,7 +16,8 @@ func main() {
 		RABBITMQ_DEFAULT_PASSWORD,
 	}
 
-	err := GetConnection(*defaultConnDef)
+	// Open a connection to the default vhost
+	_, _, err := GetConnection(*defaultConnDef)
 	if err != nil {
 		log.Print(err)
 	}
