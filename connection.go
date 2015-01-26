@@ -8,7 +8,33 @@ import (
 /**
  * Retrieves a connection from the configured AMQP host, with the given ConnectionDefinition
  */
-func GetConnection(definition ConnectionDefinition) error {
+func GetConnection(definition ConnectionDefinition) (*amqp.Connection, *amqp.Channel, error) {
+	var conn *amqp.Connection
+	var channel *amqp.Channel
+
+	conn, ok := Connection[definition.Vhost]
+	if !ok {
+		err := Connect(definition)
+		if err != nil {
+			return nil, nil, err
+		}
+		conn = Connection[definition.Vhost]
+	}
+
+	channel, ok = Channel[definition.Vhost]
+	if !ok {
+		err := OpenChannel(conn, definition)
+		if err != nil {
+			return nil, nil, err
+		}
+		channel = Channel[definition.Vhost]
+	}
+	return conn, channel, nil
+}
+
+func Connect(definition ConnectionDefinition) error {
+	log.Printf("Opening connection to %s:%s/%s\n", RABBITMQ_HOST, RABBITMQ_PORT, definition.Vhost)
+
 	connection, err := amqp.Dial("amqp://" + definition.Username + ":" + definition.Password + "@" + RABBITMQ_HOST + ":" + RABBITMQ_PORT + "/" + definition.Vhost)
 	if err != nil {
 		log.Print(err)
@@ -19,14 +45,14 @@ func GetConnection(definition ConnectionDefinition) error {
 	}
 
 	Connection[definition.Vhost] = connection
-	getChannel(Connection[definition.Vhost], definition)
-	return nil
+	err = OpenChannel(Connection[definition.Vhost], definition)
+	return err
 }
 
 /**
  * Retrieves a channel from the given connection, ConnectionDefinition
  */
-func getChannel(connection *amqp.Connection, cd ConnectionDefinition) error {
+func OpenChannel(connection *amqp.Connection, cd ConnectionDefinition) error {
 	channel, err := connection.Channel()
 	if err != nil {
 		return err
@@ -49,7 +75,7 @@ func retryAmqpConnection(connection ConnectionDefinition) error {
 		log.Fatal("Maximum connection retry count has been reached.")
 	}
 
-	err := GetConnection(connection)
+	err := Connect(connection)
 	if err != nil {
 		return err
 	}
